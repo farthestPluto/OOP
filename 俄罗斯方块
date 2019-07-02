@@ -1,0 +1,236 @@
+function $(id){
+    return document.getElementById(id);
+}
+var tetris={//游戏主程序对象
+    CSIZE:26,//保存每个格子的宽高
+    RN:20,//保存总行数
+    CN:10,//保存总列数
+    OFFSET:15,//保存单元格区域距游戏界面的内边距
+    shape:null,//保存当前正在下路的主角图形
+    nextShape:null,//保存下一个备胎图形
+    INTERVAL:300,//保存每次下落的速度
+    timer:null,//保存正在运行的当前序号
+    SCORE:[0,50,80,200,500],//保存消除的行数与分数的对应关系
+    socre:0,//保存游戏分数
+    level:1,//保存当前难度
+    lines:0,//保存消除的总行数
+    state:1,//保存游戏状态
+    RUNNING:1,//运行状态
+    PAUSE:2,//暂停状态
+    GAMEOVER:0,//游戏结束
+    wall:null,//保存所有停止下落的方块的二维数组
+    start:function(){//启动游戏
+        this.state=this.RUNNING;
+        this.socre=0;
+        this.level=1;
+        this.lines=0;
+        this.shape=this.randomShape();
+        this.nextShape=this.randomShape();
+        this.timer=setInterval(this.moveDown.bind(this),this.INTERVAL)
+        //this.moveDown.bind(this)
+        this.wall=[];
+        for(var i=0;i<this.RN;i++){
+            this.wall.push(new Array(this.CN));
+        }
+        var me=this;
+        document.onkeydown=function(e){
+            e=e||window.event;
+            switch(e.keyCode){
+                case 37:me.moveLeft();break;
+                case 39:me.moveRight();break;
+                case 40:me.moveDown();break;
+                case 38:me.rotateR();break;
+                case 90:me.rotateL();break;
+            }
+        }
+        this.paint();
+    },
+    randomShape:function(){//在7种图形中随机生成一个新图形
+        var r=Math.floor(Math.random()*7);
+        switch(r){
+            case 0:return new O();break;
+            case 1:return new I();break;
+            case 2:return new T();break;
+            case 3:return new L();break;
+            case 4:return new S();break;
+            case 5:return new Z();break;
+            case 6:return new J();break;
+        }
+    },
+    paintShape:function(){//生成主图型
+        var frag=document.createDocumentFragment();
+        for(var i=0;i<this.shape.cells.length;i++){
+            var cell=this.shape.cells[i];
+            var img=new Image;
+            img.src=cell.src;
+           //console.log(cell);
+            img.style.top=cell.r*this.CSIZE+this.OFFSET+"px";
+            img.style.left=cell.c*this.CSIZE+this.OFFSET+"px";
+
+            frag.appendChild(img);
+        }
+        $("pg").appendChild(frag);
+    },
+    paintNext:function(){//生成备胎图形
+        var frag=document.createDocumentFragment();
+        for(var i=0;i<this.nextShape.cells.length;i++){
+            var cell=this.nextShape.cells[i];
+            var img=new Image();
+            img.src=cell.src;
+            img.style.top=(cell.r+1)*this.CSIZE+this.OFFSET+"px";
+            img.style.left=(cell.c+10)*this.CSIZE+this.OFFSET+"px";
+            frag.appendChild(img); 
+        }
+        $("pg").appendChild(frag);
+    },
+    canDown:function(){//判断主角图形是否能够下落
+        for(var i=0;i<this.shape.cells.length;i++){
+            var cell=this.shape.cells[i]; 
+            if(cell.r==this.RN-1||this.wall[cell.r+1][cell.c]){
+
+                return false;
+            }
+        }
+        return true;
+    },
+    moveDown:function(){//让主角图形下落一次
+       if(this.canDown()){
+            this.shape.moveDown();
+            this.paint();
+            //console.log(this.canDown)
+        }else{
+            this.landIntoWall();
+            var ls=this.deleteRows();
+            this.lines+=ls;
+            this.socre+=this.SCORE[ls];
+            if(!this.isGameOver()){
+                this.shape=this.nextShape;
+                this.nextShape=this.randomShape();
+                //console.log(this.isGameOver());
+            }else{
+                this.state=this.GAMEOVER;
+                clearInterval(this.timer);
+                this.timer=null;
+                //console.log(this.isGameOver());
+           } 
+        }    
+          
+    },
+    landIntoWall:function(){//将停止下落的方块保存到wall中相同位置
+        for(var i=0;i<this.shape.cells.length;i++){ 
+            var cell=this.shape.cells[i];
+            this.wall[cell.r][cell.c]=cell;
+        }
+    },
+    paintWall:function(){//绘制墙中的所有格
+        var frag=document.createDocumentFragment();
+        for(var r=this.RN-1;r>=0;r--){
+            if(this.wall[r].join("")){
+                for(var c=0;c<this.CN;c++){
+                    var cell=this.wall[r][c];
+                    if(cell){
+                        var img=new Image();
+                        img.src=cell.src;
+                        img.style.top=cell.r*this.CSIZE+this.OFFSET+"px";
+                        img.style.left=cell.c*this.CSIZE+this.OFFSET+"px";
+                        frag.appendChild(img);
+                    }
+                }
+            }else{
+                break;
+            }
+        }
+        $("pg").appendChild(frag);
+    },
+    canLeft:function(){//检查能否左移
+        for(var i=0;i<this.shape.cells.length;i++){
+            var cell=this.shape.cells[i];
+            if(cell.c==0||this.wall[cell.r][cell.c-1]){
+                return false;
+            }
+        }
+        return true;
+    },
+    moveLeft:function(){//左移一次
+        if(this.canLeft()){
+            this.shape.moveLeft();
+        }
+    },
+    canRight:function(){//检查能否右移
+        for(var i=0;i<this.shape.cells.length;i++){
+            var cell=this.shape.cells[i];
+            if(cell.c==this.CN-1||this.wall[cell.r][cell.c+1]){
+                return false;
+            }
+        }
+        return true;
+    },
+    moveRight:function(){//右移一次
+        if(this.canRight()){
+            this.shape.moveRight();
+        }
+    },
+    deleteRows:function(){//删除所有满隔行
+        for(var r=this.RN-1,ls=0;r>=0;r--){
+            if(this.isFullRows(r)){
+                this.deleteRow(r);
+                ls++;
+                r++;
+                if(ls==4){break;}
+            }
+        }
+        return ls;
+    },
+    isFullRows:function(r){//检查当前行是否满格
+       return String(this.wall[r]).search(/^,|,,|,$/)!==-1?false:true;
+    },
+    deleteRow:function(delr){//删除指定行
+        for(var r=delr;r>0;r--){
+            this.wall[r]=this.wall[r-1];
+            for(var c=0;c<this.CN;c++){
+                this.wall[r][c]&&this.wall[r][c].r++;
+            }
+            this.wall[r-1]=new Array(this.CN);
+             if(this.wall[r-2].join("")==""){break;}
+        }
+    },
+    paintScore:function(){//重绘分数
+        $('score').innerHTML=this.socre;
+        $("lines").innerHTML=this.lines;
+        $("level").innerHTML=this.level;
+    },
+    rotateR:function(){//让主角图形顺时针旋转
+        this.shape.rotateR();
+        if(!this.canRotate()){this.shape.rotateL()}
+    },
+    rotateL:function(){//让主角图形逆时针旋转
+        this.shape.rotateL();
+        if(!this.canRotate()){this.shape.rotateR()}
+    },
+    canRotate:function(){//当前旋转后的图形，是否有越界和冲突
+        for(var i=0;i<this.shape.cells.length;i++){
+            var cell=this.shape.cells[i];
+            if(cell.r<0||cell.r>this.RN||cell.c<0||cell.c>this.CN){
+                return false;
+            }else if(cell.r<this.RN&&this.wall[cell.r][cell.c]){return false;}
+        }
+        return true;
+    },
+    paintState:function(){//根据游戏状态，添加对应图片
+        //console.log(this.isGameOver())
+        if(this.state!=this.RUNNING){
+             var img=new Image();
+            img.src=this.state==this.PAUSE?"img/game-over":"img/pause.png.png";
+            $("pg").appendChild(img);
+        }   
+    },
+    paint:function(){//重绘一切
+        $("pg").innerHTML=$("pg").innerHTML.replace(/<img(.*?)>/ig,"");
+        this.paintShape();
+        this.paintNext();
+        this.paintWall();
+        this.paintScore();
+        this.paintState();
+    }   
+}
+window.onload=function(){tetris.start();}
